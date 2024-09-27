@@ -10,7 +10,7 @@ function App() {
   const [webSocket, setWebSocket] = useState<WebSocket | null>(null); // Lift WebSocket state up to App
 
   useEffect(() => {
-    const newWebSocket = new WebSocket("ws://localhost:3000");
+    const newWebSocket = new WebSocket(`ws://${import.meta.env.VITE_API_URL}`);
 
     newWebSocket.onopen = () => {
       setWebSocket(newWebSocket);
