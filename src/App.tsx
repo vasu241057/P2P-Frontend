@@ -42,7 +42,7 @@ function App() {
           element={<EnterPasscode webSocket={webSocket} />}
         /> */}
         <Route
-          path="/transfer"
+          path="/transfer/:passcode"
           element={<SendingReceivingPage webSocket={webSocket} />}
         />
       </Routes>

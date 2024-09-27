@@ -35,7 +35,7 @@ export function GeneratePasscode({ webSocket }: GeneratePasscodeProps) {
             console.log(response.data.passcode);
             const message = JSON.parse(event.data);
             if (message.type === "NEW_USER_CONNECTED") {
-              navigate(`/transfer?passcode=${response.data.passcode}`);
+              navigate(`/transfer/${response.data.passcode}`);
             }
           };
         } else {

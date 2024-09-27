@@ -48,7 +48,7 @@ export function LandingPage({ webSocket }: LandingPageProps) {
                 passcode: passcode,
               })
             );
-            navigate(`/transfer?passcode=${passcode}`);
+            navigate(`/transfer/${passcode}`);
           }
         } else {
           // Handle connection error (e.g., invalid passcode)
