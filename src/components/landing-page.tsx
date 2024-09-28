@@ -35,9 +35,7 @@ export function LandingPage({ webSocket }: LandingPageProps) {
       // API request to connect with passcode using Axios
       try {
         const response = await axios.post<{ message: string }>(
-          `https://${
-            import.meta.env.VITE_API_URL
-          }/connections/connect/${passcode}`
+          `${import.meta.env.VITE_API_FULL_URL}/connections/connect/${passcode}`
         );
         console.log(response);
         // Successful connection, navigate to transfer page
