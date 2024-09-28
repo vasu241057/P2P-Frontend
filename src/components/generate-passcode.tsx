@@ -17,7 +17,9 @@ export function GeneratePasscode({ webSocket }: GeneratePasscodeProps) {
     const fetchPasscode = async () => {
       try {
         const response = await axios.post<{ passcode: string }>(
-          `http://${import.meta.env.VITE_API_URL}/connections/generate-passcode`
+          `https://${
+            import.meta.env.VITE_API_URL
+          }/connections/generate-passcode`
         );
 
         setPasscode(response.data.passcode);
