@@ -10,9 +10,9 @@ function App() {
   const [webSocket, setWebSocket] = useState<WebSocket | null>(null); // Lift WebSocket state up to App
 
   useEffect(() => {
-    console.log("backend url", import.meta.env.VITE_API_URL);
+    console.log("backend url", `https://${import.meta.env.VITE_API_URL}`);
     const newWebSocket = new WebSocket(
-      `ws://${import.meta.env.VITE_API_URL}/ws`
+      `wss://${import.meta.env.VITE_API_URL}/ws`
     );
 
     newWebSocket.onopen = () => {
