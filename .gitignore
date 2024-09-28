@@ -25,3 +25,8 @@ dist-ssr
 
 env
 .env  # Add this line to ignore the .env file
+
+# Environment variables
+.env
+.env.local
+.env.*.local
