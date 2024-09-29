@@ -5,6 +5,7 @@ import { X, Upload, Download, FileIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useParams } from "react-router-dom";
+import { saveAs } from "file-saver";
 
 interface SendingReceivingPageProps {
   webSocket: WebSocket | null;
@@ -25,7 +26,7 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const totalChunksRef = useRef(0);
   const receivedChunksRef = useRef<string[]>([]);
-  const [fileType, setFileType] = useState("");
+  const fileType = useRef<string>("");
 
   useEffect(() => {
     if (!webSocket) {
@@ -42,7 +43,8 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
         console.log("FILE_TRANSFER_INIT", message);
         setDownloadStatus("downloading");
         setFileName(message.fileName);
-        setFileType(message.fileType);
+        console.log("message.fileName", message.fileName);
+        fileType.current = message.fileType;
         setTransferId(message.transferId);
         totalChunksRef.current = message.totalChunks;
         console.log("message.totalChunks", message.totalChunks);
@@ -62,10 +64,14 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
           totalChunksRef.current
         );
 
-        if (receivedChunksRef.current.length + 1 === totalChunksRef.current) {
+        if (receivedChunksRef.current.length === totalChunksRef.current) {
           console.log("All chunks received, processing file...");
           setDownloadStatus("complete");
-          processCompletedFile();
+
+          setTimeout(() => {
+            setDownloadStatus("idle");
+            processCompletedFile();
+          }, 1200);
         }
       } else if (message.type === "FILE_TRANSFER_INIT_RECEIVED") {
         setTransferId(message.transferId);
@@ -98,14 +104,12 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
       const arrayBuffer = base64ToArrayBuffer(completeBase64);
       console.log("ArrayBuffer length:", arrayBuffer.byteLength);
 
-      const blob = new Blob([arrayBuffer], { type: fileType });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
+      // Create a Blob with the correct MIME type
+      const blob = new Blob([arrayBuffer], { type: fileType.current });
+      console.log("fileType:", fileType);
+
+      // Use file-saver to save the file with the correct extension
+      saveAs(blob, fileName);
 
       console.log("File processing complete");
     } catch (error) {
@@ -113,7 +117,6 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
       setErrorMessage("Error processing file. Please try again.");
     }
   };
-
   // Helper function to convert base64 to ArrayBuffer
   const base64ToArrayBuffer = (base64: string) => {
     try {
