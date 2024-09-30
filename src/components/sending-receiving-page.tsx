@@ -1,12 +1,11 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDropzone } from "react-dropzone";
 import {
   X,
   Upload,
-  Download,
   FileIcon,
-  Image,
+  Image as LucideImage,
   FileText,
   FileSpreadsheet,
 } from "lucide-react";
@@ -32,7 +31,7 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
     "idle" | "downloading" | "complete" | "error"
   >("idle");
   const [fileName, setFileName] = useState("");
-  const [transferId, setTransferId] = useState<string | null>(null);
+  const transferId = useRef<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [fileType, setFileType] = useState<FileType>("other");
   const totalChunksRef = useRef(0);
@@ -58,7 +57,7 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
           handleFileChunkReceived(message);
           break;
         case "FILE_TRANSFER_INIT_RECEIVED":
-          setTransferId(message.transferId);
+          transferId.current = message.transferId;
           console.log("FILE_TRANSFER_INIT_RECEIVED");
           break;
         case "ERROR":
@@ -78,7 +77,8 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
     setFileName(message.fileName);
     fileTypeRef.current = message.fileType;
     setFileType(getFileType(message.fileType));
-    setTransferId(message.transferId);
+
+    transferId.current = message.transferId;
     totalChunksRef.current = message.totalChunks;
     receivedChunksRef.current = [];
   };
@@ -142,7 +142,7 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
 
   const handleImageFile = (blob: Blob) => {
     const url = URL.createObjectURL(blob);
-    const img = new Image();
+    const img = new Image(); // This will now use the built-in Image constructor
     img.onload = () => {
       // You can perform additional processing here if needed
       saveAs(blob, fileName);
@@ -157,8 +157,8 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
   };
 
   const handleCsvFile = async (blob: Blob) => {
-    const text = await blob.text();
-    const rows = text.split("\n").map((row) => row.split(","));
+    // const text = await blob.text();
+    // const rows = text.split("\n").map((row) => row.split(","));
     // You can perform additional CSV processing here if needed
     saveAs(blob, fileName);
   };
@@ -246,7 +246,7 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
       const listener = (event: MessageEvent) => {
         const message = JSON.parse(event.data);
         if (message.type === "FILE_TRANSFER_INIT_RECEIVED") {
-          setTransferId(message.transferId);
+          transferId.current = message.transferId;
           webSocket?.removeEventListener("message", listener);
           resolve();
         }
@@ -262,7 +262,7 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
         type: "FILE_CHUNK",
         targetPasscode: passcode,
         chunkData: base64ChunkData,
-        transferId,
+        transferId: transferId.current,
         chunkNumber,
       })
     );
@@ -315,7 +315,7 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
   const getFileIcon = () => {
     switch (fileType) {
       case "image":
-        return <Image className="mx-auto h-12 w-12 text-gray-400 mb-4" />;
+        return <LucideImage className="mx-auto h-12 w-12 text-gray-400 mb-4" />;
       case "pdf":
         return <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />;
       case "csv":
