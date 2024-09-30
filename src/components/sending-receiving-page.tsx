@@ -85,6 +85,16 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
 
   const handleFileChunkReceived = (message: any) => {
     receivedChunksRef.current.push(message.chunkData);
+
+    console.log("base64ChunkData", message.chunkData.length);
+    console.log("initial 100", message.chunkData.substring(0, 100) + "...");
+    console.log(
+      "final 100",
+      message.chunkData.substring(
+        message.chunkData.length - 100,
+        message.chunkData.length
+      ) + "..."
+    );
     const progress = Math.round(
       (receivedChunksRef.current.length / totalChunksRef.current) * 100
     );
@@ -112,13 +122,41 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
       return "csv";
     return "other";
   };
-
+  const chunkBase64 = (base64: string, chunkSize: number): string[] => {
+    const chunks: string[] = [];
+    for (let i = 0; i < base64.length; i += chunkSize) {
+      chunks.push(base64.slice(i, i + chunkSize));
+    }
+    return chunks;
+  };
   const processCompletedFile = () => {
     try {
       const completeBase64 = receivedChunksRef.current.join("");
-      const arrayBuffer = base64ToArrayBuffer(completeBase64);
-      const blob = new Blob([arrayBuffer], { type: fileTypeRef.current });
+      console.log("completeBase64 length:", completeBase64.length);
 
+      // Split the base64 string into smaller chunks
+      const base64Chunks = chunkBase64(completeBase64, 500000); // 500KB chunks
+
+      const buffers: ArrayBuffer[] = [];
+      for (const chunk of base64Chunks) {
+        const buffer = base64ToArrayBuffer(chunk);
+        buffers.push(buffer);
+      }
+
+      // Combine all buffers
+      const totalLength = buffers.reduce((sum, buf) => sum + buf.byteLength, 0);
+      const combinedBuffer = new ArrayBuffer(totalLength);
+      const combinedView = new Uint8Array(combinedBuffer);
+
+      let offset = 0;
+      for (const buffer of buffers) {
+        combinedView.set(new Uint8Array(buffer), offset);
+        offset += buffer.byteLength;
+      }
+
+      const blob = new Blob([combinedBuffer], { type: fileTypeRef.current });
+
+      // Handle the file based on its type
       switch (fileType) {
         case "image":
           handleImageFile(blob);
@@ -163,16 +201,38 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
     saveAs(blob, fileName);
   };
 
+  // function padBase64(str) {
+  //   return str.padEnd(Math.ceil(str.length / 4) * 4, "=");
+  // }
+
   const base64ToArrayBuffer = (base64: string) => {
     try {
-      const binaryString = atob(base64);
-      const bytes = new Uint8Array(binaryString.length);
+      const cleanedBase64 = base64.replace(/[^A-Za-z0-9+/]/g, "");
+
+      // Pad the string if necessary
+      const paddedBase64 = cleanedBase64.padEnd(
+        Math.ceil(cleanedBase64.length / 4) * 4,
+        "="
+      );
+
+      // Decode the base64 string
+      const binaryString = atob(paddedBase64);
+
+      // Create an ArrayBuffer from the binary string
+      const buffer = new ArrayBuffer(binaryString.length);
+      const view = new Uint8Array(buffer);
+
       for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
+        view[i] = binaryString.charCodeAt(i);
       }
-      return bytes.buffer;
+
+      return buffer;
     } catch (error) {
       console.error("Error in base64ToArrayBuffer:", error);
+      console.error(
+        "Problematic base64 string:",
+        base64.substring(0, 100) + "..."
+      ); // Log part of the string
       throw new Error("Failed to decode base64 string");
     }
   };
@@ -223,6 +283,7 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
         const start = currentChunk * CHUNK_SIZE;
         const end = Math.min(start + CHUNK_SIZE, file.size);
         const chunk = await readChunkAsArrayBuffer(file.slice(start, end));
+        console.log(" readChunkAsArrayBuffer Sending chunk", chunk.byteLength);
         sendChunk(chunk, currentChunk);
         updateUploadProgress(currentChunk);
       }
@@ -257,6 +318,16 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
 
   const sendChunk = (chunkData: ArrayBuffer, chunkNumber: number) => {
     const base64ChunkData = arrayBufferToBase64(chunkData);
+    console.log("base64ChunkData", base64ChunkData.length);
+    console.log("initial 100", base64ChunkData.substring(0, 100) + "...");
+    console.log(
+      "final 100",
+      base64ChunkData.substring(
+        base64ChunkData.length - 100,
+        base64ChunkData.length
+      ) + "..."
+    );
+
     webSocket?.send(
       JSON.stringify({
         type: "FILE_CHUNK",
