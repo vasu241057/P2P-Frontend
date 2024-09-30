@@ -1,7 +1,15 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDropzone } from "react-dropzone";
-import { X, Upload, Download, FileIcon } from "lucide-react";
+import {
+  X,
+  Upload,
+  Download,
+  FileIcon,
+  Image,
+  FileText,
+  FileSpreadsheet,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useParams } from "react-router-dom";
@@ -10,6 +18,8 @@ import { saveAs } from "file-saver";
 interface SendingReceivingPageProps {
   webSocket: WebSocket | null;
 }
+
+type FileType = "image" | "pdf" | "csv" | "other";
 
 export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
   const { passcode } = useParams<{ passcode: string }>();
@@ -24,9 +34,10 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
   const [fileName, setFileName] = useState("");
   const [transferId, setTransferId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [fileType, setFileType] = useState<FileType>("other");
   const totalChunksRef = useRef(0);
   const receivedChunksRef = useRef<string[]>([]);
-  const fileType = useRef<string>("");
+  const fileTypeRef = useRef<string>("");
 
   useEffect(() => {
     if (!webSocket) {
@@ -39,48 +50,20 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
       const message = JSON.parse(event.data);
       console.log("Received message:", message.type);
 
-      if (message.type === "FILE_TRANSFER_INIT") {
-        console.log("FILE_TRANSFER_INIT", message);
-        setDownloadStatus("downloading");
-        setFileName(message.fileName);
-        console.log("message.fileName", message.fileName);
-        fileType.current = message.fileType;
-        setTransferId(message.transferId);
-        totalChunksRef.current = message.totalChunks;
-        console.log("message.totalChunks", message.totalChunks);
-        receivedChunksRef.current = [];
-        console.log("totalChunksRef.current", totalChunksRef.current);
-      } else if (message.type === "FILE_CHUNK_RECEIVED") {
-        console.log("inside FILE_CHUNK_RECEIVED");
-        receivedChunksRef.current.push(message.chunkData);
-        const progress = Math.round(
-          (receivedChunksRef.current.length / totalChunksRef.current) * 100
-        );
-        setDownloadProgress(progress);
-        console.log(
-          "Chunk received:",
-          receivedChunksRef.current.length,
-          "of",
-          totalChunksRef.current
-        );
-
-        if (receivedChunksRef.current.length === totalChunksRef.current) {
-          console.log("All chunks received, processing file...");
-          setDownloadStatus("complete");
-
-          setTimeout(() => {
-            setDownloadStatus("idle");
-            processCompletedFile();
-          }, 1200);
-        }
-      } else if (message.type === "FILE_TRANSFER_INIT_RECEIVED") {
-        setTransferId(message.transferId);
-        console.log("FILE_TRANSFER_INIT_RECEIVED");
-      } else if (message.type === "ERROR") {
-        console.error("Error:", message.message);
-        setErrorMessage(
-          message.message || "An error occurred during transfer."
-        );
+      switch (message.type) {
+        case "FILE_TRANSFER_INIT":
+          handleFileTransferInit(message);
+          break;
+        case "FILE_CHUNK_RECEIVED":
+          handleFileChunkReceived(message);
+          break;
+        case "FILE_TRANSFER_INIT_RECEIVED":
+          setTransferId(message.transferId);
+          console.log("FILE_TRANSFER_INIT_RECEIVED");
+          break;
+        case "ERROR":
+          handleError(message);
+          break;
       }
     };
 
@@ -89,27 +72,66 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
     };
   }, [passcode, webSocket]);
 
+  const handleFileTransferInit = (message: any) => {
+    console.log("FILE_TRANSFER_INIT", message);
+    setDownloadStatus("downloading");
+    setFileName(message.fileName);
+    fileTypeRef.current = message.fileType;
+    setFileType(getFileType(message.fileType));
+    setTransferId(message.transferId);
+    totalChunksRef.current = message.totalChunks;
+    receivedChunksRef.current = [];
+  };
+
+  const handleFileChunkReceived = (message: any) => {
+    receivedChunksRef.current.push(message.chunkData);
+    const progress = Math.round(
+      (receivedChunksRef.current.length / totalChunksRef.current) * 100
+    );
+    setDownloadProgress(progress);
+
+    if (receivedChunksRef.current.length === totalChunksRef.current) {
+      console.log("All chunks received, processing file...");
+      setDownloadStatus("complete");
+      setTimeout(() => {
+        setDownloadStatus("idle");
+        processCompletedFile();
+      }, 1200);
+    }
+  };
+
+  const handleError = (message: any) => {
+    console.error("Error:", message.message);
+    setErrorMessage(message.message || "An error occurred during transfer.");
+  };
+
+  const getFileType = (mimeType: string): FileType => {
+    if (mimeType.startsWith("image/")) return "image";
+    if (mimeType === "application/pdf") return "pdf";
+    if (mimeType === "text/csv" || mimeType === "application/vnd.ms-excel")
+      return "csv";
+    return "other";
+  };
+
   const processCompletedFile = () => {
     try {
-      console.log("Processing completed file...");
-      console.log("Number of chunks:", receivedChunksRef.current.length);
-      console.log(
-        "First chunk preview:",
-        receivedChunksRef.current[0]?.slice(0, 50)
-      );
-
       const completeBase64 = receivedChunksRef.current.join("");
-      console.log("Complete base64 length:", completeBase64.length);
-
       const arrayBuffer = base64ToArrayBuffer(completeBase64);
-      console.log("ArrayBuffer length:", arrayBuffer.byteLength);
+      const blob = new Blob([arrayBuffer], { type: fileTypeRef.current });
 
-      // Create a Blob with the correct MIME type
-      const blob = new Blob([arrayBuffer], { type: fileType.current });
-      console.log("fileType:", fileType);
-
-      // Use file-saver to save the file with the correct extension
-      saveAs(blob, fileName);
+      switch (fileType) {
+        case "image":
+          handleImageFile(blob);
+          break;
+        case "pdf":
+          handlePdfFile(blob);
+          break;
+        case "csv":
+          handleCsvFile(blob);
+          break;
+        default:
+          saveAs(blob, fileName);
+      }
 
       console.log("File processing complete");
     } catch (error) {
@@ -117,7 +139,30 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
       setErrorMessage("Error processing file. Please try again.");
     }
   };
-  // Helper function to convert base64 to ArrayBuffer
+
+  const handleImageFile = (blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      // You can perform additional processing here if needed
+      saveAs(blob, fileName);
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  };
+
+  const handlePdfFile = (blob: Blob) => {
+    // You can add PDF.js integration here for preview if needed
+    saveAs(blob, fileName);
+  };
+
+  const handleCsvFile = async (blob: Blob) => {
+    const text = await blob.text();
+    const rows = text.split("\n").map((row) => row.split(","));
+    // You can perform additional CSV processing here if needed
+    saveAs(blob, fileName);
+  };
+
   const base64ToArrayBuffer = (base64: string) => {
     try {
       const binaryString = atob(base64);
@@ -136,19 +181,27 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
     if (acceptedFiles.length > 0) {
       const file = acceptedFiles[0];
       setFileName(file.name);
+      setFileType(getFileType(file.type));
       setUploadStatus("uploading");
       sendFile(file);
     }
   }, []);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop });
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      "image/*": [],
+      "application/pdf": [],
+      "text/csv": [],
+      "application/vnd.ms-excel": [],
+    },
+  });
 
   const sendFile = async (file: File) => {
     const CHUNK_SIZE = 1024 * 1024; // 1MB chunks
     totalChunksRef.current = Math.ceil(file.size / CHUNK_SIZE);
 
     try {
-      // Send TRANSFER_FILE message
       await webSocket?.send(
         JSON.stringify({
           type: "TRANSFER_FILE",
@@ -160,73 +213,129 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
         })
       );
 
+      await waitForTransferInit();
+
+      for (
+        let currentChunk = 0;
+        currentChunk < totalChunksRef.current;
+        currentChunk++
+      ) {
+        const start = currentChunk * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, file.size);
+        const chunk = await readChunkAsArrayBuffer(file.slice(start, end));
+        sendChunk(chunk, currentChunk);
+        updateUploadProgress(currentChunk);
+      }
+
+      finishUpload();
+    } catch (error) {
+      handleUploadError(error);
+    }
+  };
+
+  const readChunkAsArrayBuffer = (blob: Blob): Promise<ArrayBuffer> => {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      let currentChunk = 0;
-
-      reader.onload = (event) => {
-        if (event.target?.readyState === FileReader.DONE) {
-          const chunkData = event.target.result as ArrayBuffer;
-          const uint8Array = new Uint8Array(chunkData);
-          let binary = "";
-          const len = uint8Array.byteLength;
-          for (let i = 0; i < len; i++) {
-            binary += String.fromCharCode(uint8Array[i]);
-          }
-          const base64ChunkData = btoa(binary);
-
-          // Send FILE_CHUNK message
-          webSocket?.send(
-            JSON.stringify({
-              type: "FILE_CHUNK",
-              targetPasscode: passcode,
-              chunkData: base64ChunkData,
-              transferId,
-              chunkNumber: currentChunk,
-            })
-          );
-
-          const progress = Math.round(
-            ((currentChunk + 1) / totalChunksRef.current) * 100
-          );
-          setUploadProgress(progress);
-          currentChunk++;
-
-          if (currentChunk < totalChunksRef.current) {
-            const nextSlice = file.slice(
-              currentChunk * CHUNK_SIZE,
-              (currentChunk + 1) * CHUNK_SIZE
-            );
-            reader.readAsArrayBuffer(nextSlice);
-          } else {
-            setUploadStatus("complete");
-            setTimeout(() => {
-              setUploadStatus("idle");
-            }, 1200);
-          }
+      reader.onload = (e) => resolve(e.target?.result as ArrayBuffer);
+      reader.onerror = (e) => reject(e);
+      reader.readAsArrayBuffer(blob);
+    });
+  };
+  const waitForTransferInit = () => {
+    return new Promise<void>((resolve) => {
+      const listener = (event: MessageEvent) => {
+        const message = JSON.parse(event.data);
+        if (message.type === "FILE_TRANSFER_INIT_RECEIVED") {
+          setTransferId(message.transferId);
+          webSocket?.removeEventListener("message", listener);
+          resolve();
         }
       };
+      webSocket?.addEventListener("message", listener);
+    });
+  };
 
-      const firstSlice = file.slice(0, CHUNK_SIZE);
-      console.log("firstSlice", firstSlice);
-      reader.readAsArrayBuffer(firstSlice);
-    } catch (error) {
-      console.error("Error sending file:", error);
-      setUploadStatus("error");
-      setErrorMessage("An error occurred during upload.");
+  const sendChunk = (chunkData: ArrayBuffer, chunkNumber: number) => {
+    const base64ChunkData = arrayBufferToBase64(chunkData);
+    webSocket?.send(
+      JSON.stringify({
+        type: "FILE_CHUNK",
+        targetPasscode: passcode,
+        chunkData: base64ChunkData,
+        transferId,
+        chunkNumber,
+      })
+    );
+  };
+
+  const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
+    let binary = "";
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
     }
+    return btoa(binary);
+  };
+
+  const updateUploadProgress = (currentChunk: number) => {
+    const progress = Math.round(
+      ((currentChunk + 1) / totalChunksRef.current) * 100
+    );
+    setUploadProgress(progress);
+  };
+
+  const readNextChunk = (
+    file: File,
+    chunkNumber: number,
+    chunkSize: number,
+    reader: FileReader
+  ) => {
+    const start = chunkNumber * chunkSize;
+    const end = Math.min(start + chunkSize, file.size);
+    reader.readAsArrayBuffer(file.slice(start, end));
+  };
+
+  const finishUpload = () => {
+    setUploadStatus("complete");
+    setTimeout(() => {
+      setUploadStatus("idle");
+    }, 1200);
+  };
+
+  const handleUploadError = (error: any) => {
+    console.error("Error sending file:", error);
+    setUploadStatus("error");
+    setErrorMessage("An error occurred during upload.");
   };
 
   const resetUpload = () => {
     setUploadStatus("idle");
     setUploadProgress(0);
     setFileName("");
+    setFileType("other");
   };
 
   const resetDownload = () => {
     setDownloadStatus("idle");
     setDownloadProgress(0);
-    // setReceivedChunks([]);
     receivedChunksRef.current = [];
+    setFileType("other");
+  };
+
+  const getFileIcon = () => {
+    switch (fileType) {
+      case "image":
+        return <Image className="mx-auto h-12 w-12 text-gray-400 mb-4" />;
+      case "pdf":
+        return <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />;
+      case "csv":
+        return (
+          <FileSpreadsheet className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+        );
+      default:
+        return <FileIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />;
+    }
   };
 
   return (
@@ -251,7 +360,8 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
               <input {...getInputProps()} />
               <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <p className="text-gray-300">
-                Drag &amp; drop a file here, or click to select a file
+                Drag &amp; drop an image, PDF, or CSV file here, or click to
+                select
               </p>
             </div>
             <AnimatePresence>
@@ -297,17 +407,10 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
             </h2>
             {downloadStatus === "idle" ? (
               <div className="border-2 border-gray-600 rounded-lg p-8 text-center">
-                <FileIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                {getFileIcon()}
                 <p className="text-gray-300 mb-4">
                   Waiting for incoming file...
                 </p>
-                <Button
-                  // onClick={simulateDownload}
-                  className="w-full py-2 text-lg"
-                >
-                  <Download className="h-6 w-6 mr-2" />
-                  Simulate Incoming File
-                </Button>
               </div>
             ) : (
               <AnimatePresence>
@@ -318,7 +421,7 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
                   transition={{ duration: 0.3 }}
                 >
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-gray-300">incoming_file.zip</span>
+                    <span className="text-gray-300">{fileName}</span>
                     <span className="text-gray-400">{downloadProgress}%</span>
                   </div>
                   <Progress
@@ -346,7 +449,9 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
             )}
           </div>
           {errorMessage && (
-            <div className="text-red-500 text-center mt-4">{errorMessage}</div>
+            <div className="col-span-2 text-red-500 text-center mt-4">
+              {errorMessage}
+            </div>
           )}
         </div>
       </div>
