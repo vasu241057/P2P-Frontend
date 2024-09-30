@@ -285,17 +285,6 @@ export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
     setUploadProgress(progress);
   };
 
-  const readNextChunk = (
-    file: File,
-    chunkNumber: number,
-    chunkSize: number,
-    reader: FileReader
-  ) => {
-    const start = chunkNumber * chunkSize;
-    const end = Math.min(start + chunkSize, file.size);
-    reader.readAsArrayBuffer(file.slice(start, end));
-  };
-
   const finishUpload = () => {
     setUploadStatus("complete");
     setTimeout(() => {
