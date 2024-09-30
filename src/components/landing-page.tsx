@@ -1,16 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { motion } from "framer-motion";
 import { Toggle } from "@/components/ui/toggle";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-interface LandingPageProps {
-  webSocket: WebSocket | null;
-}
-export function LandingPage({ webSocket }: LandingPageProps) {
+import { WebSocketContext } from "@/layouts/root-layout";
+
+export function LandingPage() {
+  const webSocket = useContext(WebSocketContext);
   const [name, setName] = useState("");
   const [usePasscode, setUsePasscode] = useState(false);
   const [passcode, setPasscode] = useState("");

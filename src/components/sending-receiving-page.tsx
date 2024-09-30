@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useContext } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDropzone } from "react-dropzone";
 import {
@@ -13,14 +13,12 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useParams } from "react-router-dom";
 import { saveAs } from "file-saver";
-
-interface SendingReceivingPageProps {
-  webSocket: WebSocket | null;
-}
+import { WebSocketContext } from "@/layouts/root-layout";
 
 type FileType = "image" | "pdf" | "csv" | "other";
 
-export function SendingReceivingPage({ webSocket }: SendingReceivingPageProps) {
+export function SendingReceivingPage() {
+  const webSocket = useContext(WebSocketContext);
   const { passcode } = useParams<{ passcode: string }>();
   const [uploadProgress, setUploadProgress] = useState(0);
   const [downloadProgress, setDownloadProgress] = useState(0);

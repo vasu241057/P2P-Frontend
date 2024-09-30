@@ -1,15 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { motion } from "framer-motion";
 import { Copy, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { WebSocketContext } from "@/layouts/root-layout";
 
-interface GeneratePasscodeProps {
-  webSocket: WebSocket | null;
-}
-
-export function GeneratePasscode({ webSocket }: GeneratePasscodeProps) {
+export function GeneratePasscode() {
+  const webSocket = useContext(WebSocketContext);
   const [passcode, setPasscode] = useState("");
   const navigate = useNavigate();
 
