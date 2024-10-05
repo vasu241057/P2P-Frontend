@@ -190,13 +190,37 @@ export function SendingReceivingPage() {
 
   const handleImageFile = (blob: Blob) => {
     const url = URL.createObjectURL(blob);
-    const img = new Image(); // This will now use the built-in Image constructor
-    img.onload = () => {
-      // You can perform additional processing here if needed
+
+    // Create a modal to display the image
+    const modal = document.createElement("div");
+    modal.style.position = "fixed";
+    modal.style.top = "0";
+    modal.style.left = "0";
+    modal.style.width = "100%";
+    modal.style.height = "100%";
+    modal.style.backgroundColor = "rgba(0,0,0,0.8)";
+    modal.style.display = "flex";
+    modal.style.justifyContent = "center";
+    modal.style.alignItems = "center";
+    modal.style.zIndex = "1000";
+
+    const img = new Image();
+    img.src = url;
+    img.style.maxWidth = "90%";
+    img.style.maxHeight = "90%";
+    img.style.objectFit = "contain";
+
+    modal.appendChild(img);
+    document.body.appendChild(modal);
+
+    console.log("inside handle image");
+
+    // Close modal and save file when clicked
+    modal.onclick = () => {
+      document.body.removeChild(modal);
       saveAs(blob, fileName);
       URL.revokeObjectURL(url);
     };
-    img.src = url;
   };
 
   const handlePdfFile = (blob: Blob) => {
