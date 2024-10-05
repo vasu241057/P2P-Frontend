@@ -1,60 +1,81 @@
 import { useState, useEffect, useContext } from "react";
 import { motion } from "framer-motion";
-import { Copy, Share2 } from "lucide-react";
+import { Copy, Share2, Loader } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import axios from "axios";
 import { WebSocketContext } from "@/layouts/root-layout";
+import { toast } from "react-toastify";
+import { useUser } from "@clerk/clerk-react";
+import { StyledLoading } from "./ui/loader";
 
 export function GeneratePasscode() {
+  const { isLoaded, isSignedIn } = useUser();
   const webSocket = useContext(WebSocketContext);
   const [passcode, setPasscode] = useState("");
+  const [isGenerating, setIsGenerating] = useState(true);
+  const [isCopied, setIsCopied] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchPasscode = async () => {
-      try {
-        const response = await axios.post<{ passcode: string }>(
-          `${import.meta.env.VITE_API_FULL_URL}/connections/generate-passcode`
+    if (isSignedIn) {
+      generatePasscode();
+    }
+  }, [isSignedIn]);
+
+  if (!isLoaded) {
+    return <StyledLoading />;
+  }
+
+  if (!isSignedIn) {
+    return <Navigate to="/" replace />;
+  }
+
+  const generatePasscode = async () => {
+    try {
+      setIsGenerating(true);
+      const response = await axios.post<{ passcode: string }>(
+        `${import.meta.env.VITE_API_FULL_URL}/connections/generate-passcode`
+      );
+
+      setPasscode(response.data.passcode);
+
+      if (webSocket) {
+        webSocket.send(
+          JSON.stringify({
+            type: "SET_PASSCODE",
+            passcode: response.data.passcode,
+          })
         );
 
-        setPasscode(response.data.passcode);
-        console.log("webSocket", webSocket);
-
-        if (webSocket) {
-          webSocket.send(
-            JSON.stringify({
-              type: "SET_PASSCODE",
-              passcode: response.data.passcode,
-            })
-          );
-
-          webSocket.onmessage = (event) => {
-            console.log(response.data.passcode);
-            const message = JSON.parse(event.data);
-            if (message.type === "NEW_USER_CONNECTED") {
-              navigate(`/transfer/${response.data.passcode}`);
-            }
-          };
-        } else {
-          console.error("WebSocket not available");
-          // Handle the case where WebSocket is not yet connected
-        }
-      } catch (error) {
-        console.error("Error:", error);
+        webSocket.onmessage = (event) => {
+          const message = JSON.parse(event.data);
+          if (message.type === "NEW_USER_CONNECTED") {
+            toast.success("New user connected!");
+            navigate(`/transfer/${response.data.passcode}`);
+          }
+        };
+      } else {
+        console.error("WebSocket not available");
+        toast.error("Connection error. Please try again.");
       }
-    };
+    } catch (error) {
+      console.error("Error generating passcode:", error);
+      toast.error("Failed to generate passcode. Please try again.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
-    fetchPasscode();
-
-    // No need to close the WebSocket here, as it's managed in the App component
-  }, [navigate, webSocket]);
   const copyToClipboard = () => {
     navigator.clipboard.writeText(passcode);
+    setIsCopied(true);
+    toast.success("Passcode copied to clipboard!");
+    setTimeout(() => setIsCopied(false), 1500);
   };
 
   return (
-    <div className=" fixed inset-0  w-full h-full bg-black flex items-center justify-center p-4">
+    <div className="fixed inset-0 w-full h-full bg-black flex items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -69,14 +90,20 @@ export function GeneratePasscode() {
         >
           Your Generated Passcode
         </motion.h1>
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ delay: 0.4, duration: 0.8 }}
-          className="text-5xl font-bold text-center mb-8 p-4 bg-gradient-to-r from-blue-500 to-purple-600 text-transparent bg-clip-text"
-        >
-          {passcode}
-        </motion.div>
+        {isGenerating ? (
+          <div className="flex justify-center items-center h-24">
+            <Loader className="w-8 h-8 text-blue-500 animate-spin" />
+          </div>
+        ) : (
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.4, duration: 0.8 }}
+            className="text-5xl font-bold text-center mb-8 p-4 bg-gradient-to-r from-blue-500 to-purple-600 text-transparent bg-clip-text"
+          >
+            {passcode}
+          </motion.div>
+        )}
         <div className="space-y-6">
           <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -105,9 +132,10 @@ export function GeneratePasscode() {
           >
             <Button
               onClick={copyToClipboard}
+              disabled={isGenerating}
               className="w-full py-2 px-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-bold rounded-md hover:from-blue-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition-all duration-300 transform hover:scale-105"
             >
-              Copy Passcode
+              {isCopied ? "Copied!" : "Copy Passcode"}
             </Button>
           </motion.div>
         </div>

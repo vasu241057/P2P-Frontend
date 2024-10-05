@@ -11,13 +11,16 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { saveAs } from "file-saver";
 import { WebSocketContext } from "@/layouts/root-layout";
+import { toast } from "react-toastify";
+import { useUser } from "@clerk/clerk-react";
 
 type FileType = "image" | "pdf" | "csv" | "other";
 
 export function SendingReceivingPage() {
+  const { isLoaded, isSignedIn } = useUser();
   const webSocket = useContext(WebSocketContext);
   const { passcode } = useParams<{ passcode: string }>();
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -35,11 +38,16 @@ export function SendingReceivingPage() {
   const totalChunksRef = useRef(0);
   const receivedChunksRef = useRef<string[]>([]);
   const fileTypeRef = useRef<string>("");
+  const navigate = useNavigate();
 
   useEffect(() => {
+    if (!isSignedIn) {
+      navigate(`/`);
+    }
     if (!webSocket) {
       console.error("WebSocket not available");
       setErrorMessage("Connection error. Please try again.");
+      toast.error("Connection error. Please try again.");
       return;
     }
 
@@ -57,6 +65,7 @@ export function SendingReceivingPage() {
         case "FILE_TRANSFER_INIT_RECEIVED":
           transferId.current = message.transferId;
           console.log("FILE_TRANSFER_INIT_RECEIVED");
+          toast.info("File transfer initiated");
           break;
         case "ERROR":
           handleError(message);
@@ -67,7 +76,7 @@ export function SendingReceivingPage() {
     return () => {
       // Cleanup logic if needed
     };
-  }, [passcode, webSocket]);
+  }, [isLoaded, isSignedIn, passcode, webSocket]);
 
   const handleFileTransferInit = (message: any) => {
     console.log("FILE_TRANSFER_INIT", message);
@@ -79,6 +88,7 @@ export function SendingReceivingPage() {
     transferId.current = message.transferId;
     totalChunksRef.current = message.totalChunks;
     receivedChunksRef.current = [];
+    toast.info(`Receiving file: ${message.fileName}`);
   };
 
   const handleFileChunkReceived = (message: any) => {
@@ -101,6 +111,7 @@ export function SendingReceivingPage() {
     if (receivedChunksRef.current.length === totalChunksRef.current) {
       console.log("All chunks received, processing file...");
       setDownloadStatus("complete");
+      toast.success("File download complete!");
       setTimeout(() => {
         setDownloadStatus("idle");
         processCompletedFile();
@@ -111,6 +122,7 @@ export function SendingReceivingPage() {
   const handleError = (message: any) => {
     console.error("Error:", message.message);
     setErrorMessage(message.message || "An error occurred during transfer.");
+    toast.error(message.message || "An error occurred during transfer.");
   };
 
   const getFileType = (mimeType: string): FileType => {
@@ -287,6 +299,7 @@ export function SendingReceivingPage() {
       }
 
       finishUpload();
+      toast.success("File upload complete!");
     } catch (error) {
       handleUploadError(error);
     }
@@ -365,6 +378,7 @@ export function SendingReceivingPage() {
     console.error("Error sending file:", error);
     setUploadStatus("error");
     setErrorMessage("An error occurred during upload.");
+    toast.error("An error occurred during upload.");
   };
 
   const resetUpload = () => {

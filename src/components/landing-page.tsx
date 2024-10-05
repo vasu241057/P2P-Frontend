@@ -1,15 +1,17 @@
-"use client";
-
-import { useContext, useState } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Toggle } from "@/components/ui/toggle";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import axios from "axios";
 import { WebSocketContext } from "@/layouts/root-layout";
+import { toast } from "react-toastify";
+import { useUser } from "@clerk/clerk-react";
+import { StyledLoading } from "./ui/loader";
 
 export function LandingPage() {
+  const { isLoaded, isSignedIn, user } = useUser();
   const webSocket = useContext(WebSocketContext);
   const [name, setName] = useState("");
   const [usePasscode, setUsePasscode] = useState(false);
@@ -17,17 +19,33 @@ export function LandingPage() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
+  useEffect(() => {
+    if (isLoaded && isSignedIn && user) {
+      setName(user.fullName || "");
+    }
+  }, [isLoaded, isSignedIn, user]);
+
+  if (!isLoaded) {
+    return <StyledLoading />;
+  }
+
+  if (!isSignedIn) {
+    return <Navigate to="/" replace />;
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(""); // Clear any previous errors
 
     if (!name.trim()) {
       setError("Please enter your name.");
+      toast.error("Please enter your name.");
       return;
     }
 
     if (usePasscode && !passcode.trim()) {
       setError("Please enter a passcode.");
+      toast.error("Please enter a passcode.");
       return;
     }
 
@@ -38,7 +56,6 @@ export function LandingPage() {
           `${import.meta.env.VITE_API_FULL_URL}/connections/connect/${passcode}`
         );
         console.log(response);
-        // Successful connection, navigate to transfer page
 
         if (response.status === 200) {
           if (webSocket) {
@@ -48,21 +65,30 @@ export function LandingPage() {
                 passcode: passcode,
               })
             );
+            toast.success("Connected successfully!");
             navigate(`/transfer/${passcode}`);
           }
         } else {
           // Handle connection error (e.g., invalid passcode)
-          setError(
-            response.data.message || "Failed to connect. Please try again."
-          );
+          const errorMessage =
+            response.data.message || "Failed to connect. Please try again.";
+          setError(errorMessage);
+          toast.error(errorMessage);
         }
       } catch (error) {
         console.error("Error connecting:", error);
-        setError("An error occurred. Please try again later.");
+        const errorMessage = "An error occurred. Please try again later.";
+        setError(errorMessage);
+        toast.error(errorMessage);
       }
     } else {
+      toast.info("Generating new passcode...");
       navigate("/generate-passcode");
     }
+  };
+
+  const handlePasscodeToggle = (generatePasscode: boolean) => {
+    setUsePasscode(!generatePasscode);
   };
 
   return (
@@ -101,7 +127,7 @@ export function LandingPage() {
             <div className="flex items-center justify-between bg-gray-800 rounded-md p-1">
               <Toggle
                 pressed={usePasscode}
-                onPressedChange={setUsePasscode}
+                onPressedChange={() => handlePasscodeToggle(false)}
                 className="w-1/2 py-2 text-sm font-medium text-center rounded-md transition-all duration-300"
                 variant={usePasscode ? "default" : "outline"}
               >
@@ -109,7 +135,7 @@ export function LandingPage() {
               </Toggle>
               <Toggle
                 pressed={!usePasscode}
-                onPressedChange={(pressed) => setUsePasscode(!pressed)}
+                onPressedChange={() => handlePasscodeToggle(true)}
                 className="w-1/2 py-2 text-sm font-medium text-center rounded-md transition-all duration-300"
                 variant={!usePasscode ? "default" : "outline"}
               >
